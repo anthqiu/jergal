@@ -1,21 +1,21 @@
 package xyz.qhurc.jergal.model.ui.navigationitem
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.outlined.Android
 import androidx.compose.ui.graphics.vector.ImageVector
 
-object SearchNavigationItem: NavigationItem() {
+object AndroidNavigationItem : NavigationItem() {
     override fun getName(): String {
-        return "Search"
+        return "Apps"
     }
 
     override fun getNormalIconImageVector(): ImageVector {
-        return Icons.Outlined.Search
+        return Icons.Outlined.Android
     }
 
     override fun getSelectedIconImageVector(): ImageVector {
-        return Icons.Filled.Search
+        return Icons.Filled.Android
     }
 
     override fun onClick() {

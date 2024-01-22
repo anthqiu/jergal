@@ -1,6 +1,7 @@
-package xyz.qhurc.jergal.ui.layouts
+package xyz.qhurc.jergal.ui.items
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -11,13 +12,18 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import xyz.qhurc.jergal.model.Title
 
 @Composable
 fun createItem(it: Title, topPadding: Boolean = false, bottomPadding: Boolean = false) {
+    val focused = remember { mutableStateOf(false) }
+
     ElevatedCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         modifier = Modifier
@@ -33,8 +39,16 @@ fun createItem(it: Title, topPadding: Boolean = false, bottomPadding: Boolean = 
             )
             .clickable {
 
+            }
+            .focusable()
+            .onFocusChanged {
+                focused.value = it.isFocused
             },
-        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer)
+        colors = if (focused.value) {
+            CardDefaults.cardColors(MaterialTheme.colorScheme.secondaryContainer)
+        } else {
+            CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer)
+        }
     ) {
         Row {
             Text(

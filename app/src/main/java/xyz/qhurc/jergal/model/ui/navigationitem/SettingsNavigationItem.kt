@@ -5,16 +5,16 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
-class SettingsNavigationItem: NavigationItem() {
+object SettingsNavigationItem: NavigationItem() {
     override fun getName(): String {
         return "Settings"
     }
 
-    override fun getNormalIcon(): ImageVector {
+    override fun getNormalIconImageVector(): ImageVector {
         return Icons.Outlined.Settings
     }
 
-    override fun getSelectedIcon(): ImageVector {
+    override fun getSelectedIconImageVector(): ImageVector {
         return Icons.Filled.Settings
     }
 
