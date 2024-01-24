@@ -5,10 +5,14 @@ import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.NavigationRail
@@ -33,22 +37,24 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.createGraph
 import xyz.qhurc.jergal.common.ContentManager
+import xyz.qhurc.jergal.model.JC
 import xyz.qhurc.jergal.model.ui.navigationitem.AndroidNavigationItem
 import xyz.qhurc.jergal.model.ui.navigationitem.NavigationItem
 import xyz.qhurc.jergal.model.ui.navigationitem.PlatformNavigationItem
 import xyz.qhurc.jergal.model.ui.navigationitem.SearchNavigationItem
 import xyz.qhurc.jergal.model.ui.navigationitem.SettingsNavigationItem
 import xyz.qhurc.jergal.ui.screens.createAndroidAppsScreen
+import xyz.qhurc.jergal.ui.screens.createPlatformGrid
+import xyz.qhurc.jergal.ui.screens.createSettingsScreen
 import xyz.qhurc.jergal.ui.theme.JergalTheme
 
 class MainActivity : AppCompatActivity() {
     lateinit var navController: NavHostController
-    lateinit var contentMgr: ContentManager
     lateinit var selectedItem: MutableState<NavigationItem>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        contentMgr = ContentManager(this.applicationContext)
+        initConstants()
 
         onBackPressedDispatcher.addCallback(object : OnBackPressedCallback(true) {
             // true: for prevent back and do something in handleOnBackPressed
@@ -61,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
 
         setContent {
-            navController = rememberNavController()
+            initComposableConstants()
             hideSystemBars()
 
             JergalTheme {
@@ -78,10 +84,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
+    private fun initConstants() {
+        ContentManager.getOrInitConfig(this.applicationContext)
+    }
+
+    @Composable
+    private fun initComposableConstants() {
+        navController = rememberNavController()
+        JC.initComposableVal(context = this.applicationContext)
+    }
+
     @Composable
     fun createNavigationLayout() {
         selectedItem = remember { mutableStateOf(AndroidNavigationItem as NavigationItem) }
-        val platforms = contentMgr.getPlatforms()
+        val platforms = ContentManager.getPlatforms()
         val platformNavItems =
             remember { mutableStateOf(platforms.map { it -> PlatformNavigationItem(it) }) }
 
@@ -92,9 +109,14 @@ class MainActivity : AppCompatActivity() {
         ) {
             createNavigationItem(item = SettingsNavigationItem, selectedItem = selectedItem)
             createNavigationItem(item = SearchNavigationItem, selectedItem = selectedItem)
-            createNavigationItem(item = AndroidNavigationItem, selectedItem = selectedItem)
 
             LazyColumn {
+                item {
+                    createNavigationItem(
+                        item = AndroidNavigationItem,
+                        selectedItem = selectedItem
+                    )
+                }
                 items(platformNavItems.value) { item ->
                     createPlatformNavigationItem(item = item, selectedItem = selectedItem)
                 }
@@ -105,38 +127,22 @@ class MainActivity : AppCompatActivity() {
     @Composable
     fun createScreens(startDestination: String = AndroidNavigationItem.getName()) {
         val graph = navController.createGraph(startDestination) {
-            composable(SettingsNavigationItem.getName()) {}
+            composable(SettingsNavigationItem.getName()) { createSettingsScreen() }
             composable(SearchNavigationItem.getName()) {}
             composable(AndroidNavigationItem.getName()) { createAndroidAppsScreen() }
-            val platforms = contentMgr.getPlatforms()
+            val platforms = ContentManager.getPlatforms()
             platforms.forEach { platform ->
-                composable(platform.name) { Text(text = platform.name) }
+                composable(platform.name) { createPlatformGrid(platform = platform) }
             }
         }
-
-        NavHost(navController = navController, graph = graph)
+        Box(
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.systemBars)
+                .fillMaxSize()
+        ) {
+            NavHost(navController = navController, graph = graph)
+        }
     }
-
-//    @Composable
-//    fun createMainGrid(titles: List<Title>) {
-//        LazyVerticalStaggeredGrid(
-//            columns = StaggeredGridCells.Adaptive(minSize = JergalConstants.PLATFORM_ITEM_WIDTH),
-//            modifier = Modifier
-//                .padding(horizontal = 8.dp)
-//                .fillMaxSize(),
-//            verticalItemSpacing = 8.dp,
-//            horizontalArrangement = Arrangement.spacedBy(8.dp),
-//            content = {
-//                itemsIndexed(titles) { index, item ->
-//                    createItem(
-//                        it = item,
-//                        topPadding = index < 2,
-//                        bottomPadding = index >= (titles.size - 2)
-//                    )
-//                }
-//            }
-//        )
-//    }
 
 
     @Composable

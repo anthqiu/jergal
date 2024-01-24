@@ -31,8 +31,7 @@
         android:stateNotNeeded="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.Jergal"
-        tools:targetApi="31"
-        android:banner="TODO">
+        tools:targetApi="31">
         <activity
             android:name=".MainActivity"
             android:exported="true"

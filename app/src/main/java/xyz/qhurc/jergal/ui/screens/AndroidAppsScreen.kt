@@ -3,108 +3,34 @@ package xyz.qhurc.jergal.ui.screens
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults.cardColors
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Alignment.Companion.CenterHorizontally
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.core.graphics.drawable.toBitmap
-import xyz.qhurc.jergal.model.JergalConstants
+import xyz.qhurc.jergal.model.AppInfo
+import xyz.qhurc.jergal.model.JC
+import xyz.qhurc.jergal.ui.items.createAndroidAppGridItem
 import xyz.qhurc.jergal.util.JergalLog
 
 const val TAG = "AndroidAppsScreen"
 
-data class AppInfo(
-    val label: String, val packageName: String, val icon: ImageBitmap
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun createAndroidAppsScreen() {
     val apps = getApps(LocalContext.current.packageManager)
-    val selectedCardColors = cardColors(
-        containerColor = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-    )
-    val nonSelectedCardColors = cardColors(
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onBackground
-    )
 
     val focusedItem = remember { mutableStateOf(-1) }
 
-    LazyVerticalGrid(columns = GridCells.Adaptive(JergalConstants.ANDROID_APP_TILE_WIDTH),
-        modifier = Modifier
-            .windowInsetsPadding(WindowInsets.systemBars),
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(JC.ANDROID_APP_TILE_WIDTH),
         content = {
-//            item(span = { GridItemSpan(maxLineSpan) }) {
-//                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.systemBars))
-//            }
-            itemsIndexed(apps) { idx, app ->
-                val focused = remember { mutableStateOf(false) }
-                val interactionSource = remember { MutableInteractionSource() }
-                interactionSource.collectIsHoveredAsState()
-                Card(
-                    onClick = {},
-                    colors = nonSelectedCardColors,
-                    interactionSource = interactionSource
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .size(
-                                JergalConstants.ANDROID_APP_TILE_WIDTH,
-                                JergalConstants.ANDROID_APP_TILE_HEIGHT
-                            )
-                            .align(CenterHorizontally)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(JergalConstants.ANDROID_APP_ICON_BOX_SIZE)
-                                .align(CenterHorizontally)
-                        )
-                        {
-                            Image(
-                                bitmap = app.icon,
-                                contentDescription = app.label,
-                                modifier = Modifier
-                                    .size(JergalConstants.ANDROID_APP_ICON_SIZE)
-                                    .align(Alignment.Center)
-                            )
-                        }
-                        Text(
-                            text = app.label,
-                            modifier = Modifier.align(CenterHorizontally),
-                            style = MaterialTheme.typography.labelLarge,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+            items(apps) { app ->
+                createAndroidAppGridItem(app = app)
             }
-//            item(span = { GridItemSpan(maxLineSpan) }) {
-//                Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.systemBars))
-//            }
         }
     )
 }
@@ -115,7 +41,7 @@ fun getApps(packageManager: PackageManager): List<AppInfo> {
         addCategory(Intent.CATEGORY_LAUNCHER)
     }
     val apps = packageManager.queryIntentActivities(intent, 0)
-    return apps.map { resolveInfoToAppInfo(it, packageManager) }
+    return apps.map { resolveInfoToAppInfo(it, packageManager) }.sorted()
 }
 
 private fun resolveInfoToAppInfo(

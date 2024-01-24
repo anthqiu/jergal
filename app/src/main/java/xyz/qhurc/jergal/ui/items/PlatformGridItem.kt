@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import xyz.qhurc.jergal.model.Title
 
 @Composable
-fun createItem(it: Title, topPadding: Boolean = false, bottomPadding: Boolean = false) {
+fun createPlatformGridItem(it: Title, topPadding: Boolean = false, bottomPadding: Boolean = false) {
     val focused = remember { mutableStateOf(false) }
 
     ElevatedCard(
@@ -44,11 +44,7 @@ fun createItem(it: Title, topPadding: Boolean = false, bottomPadding: Boolean = 
             .onFocusChanged {
                 focused.value = it.isFocused
             },
-        colors = if (focused.value) {
-            CardDefaults.cardColors(MaterialTheme.colorScheme.secondaryContainer)
-        } else {
-            CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer)
-        }
+        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.background)
     ) {
         Row {
             Text(
