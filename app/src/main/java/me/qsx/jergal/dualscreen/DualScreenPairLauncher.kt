@@ -4,8 +4,6 @@ import android.app.Activity
 import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
-import android.hardware.display.DisplayManager
-import android.view.Display
 import me.qsx.jergal.BottomScreenActivity
 import me.qsx.jergal.TopScreenActivity
 
@@ -18,7 +16,7 @@ object DualScreenPairLauncher {
      */
     fun launchPair(context: Context) {
         DualScreenSafetyNetManager.ensureSafetyNetActivities(context)
-        val targets = resolveDisplayTargets(context)
+        val targets = DisplayTargetResolver.resolve(context)
         if (!DualScreenCoordinator.isScreenVisible(DualScreenCoordinator.TOP_SCREEN)) {
             launchTopHomeOnDisplay(context, targets.topDisplayId)
         }
@@ -31,7 +29,7 @@ object DualScreenPairLauncher {
      * Restores the bottom-screen activity when the top screen returns to the foreground.
      */
     fun restoreBottomScreenFromTop(activity: Activity) {
-        val targets = resolveDisplayTargets(activity)
+        val targets = DisplayTargetResolver.resolve(activity)
         if (
             targets.bottomDisplayId == targets.topDisplayId ||
             DualScreenCoordinator.isScreenVisible(DualScreenCoordinator.BOTTOM_SCREEN)
@@ -45,7 +43,7 @@ object DualScreenPairLauncher {
      * Restores the top-screen activity when the bottom screen returns to the foreground on its own.
      */
     fun restoreTopScreenFromBottom(activity: Activity) {
-        val targets = resolveDisplayTargets(activity)
+        val targets = DisplayTargetResolver.resolve(activity)
         if (
             targets.bottomDisplayId == targets.topDisplayId ||
             DualScreenCoordinator.isScreenVisible(DualScreenCoordinator.TOP_SCREEN)
@@ -53,20 +51,6 @@ object DualScreenPairLauncher {
             return
         }
         launchTopHomeOnDisplay(activity, targets.topDisplayId)
-    }
-
-    private fun resolveDisplayTargets(context: Context): DisplayTargets {
-        val displayManager = context.getSystemService(DisplayManager::class.java)
-        val displays = displayManager?.displays?.sortedBy { it.displayId }.orEmpty()
-        val topDisplayId = displays.firstOrNull { it.displayId == Display.DEFAULT_DISPLAY }?.displayId
-            ?: displays.firstOrNull()?.displayId
-            ?: Display.DEFAULT_DISPLAY
-        val bottomDisplayId = displays.firstOrNull { it.displayId != topDisplayId }?.displayId
-            ?: topDisplayId
-        return DisplayTargets(
-            topDisplayId = topDisplayId,
-            bottomDisplayId = bottomDisplayId,
-        )
     }
 
     private fun launchTopHomeOnDisplay(
@@ -113,8 +97,3 @@ object DualScreenPairLauncher {
         context.startActivity(intent, options.toBundle())
     }
 }
-
-private data class DisplayTargets(
-    val topDisplayId: Int,
-    val bottomDisplayId: Int,
-)

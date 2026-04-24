@@ -1,6 +1,9 @@
 package me.qsx.jergal
 
+import android.app.ActivityOptions
+import android.content.Intent
 import android.os.Bundle
+import android.view.Display
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -9,7 +12,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import me.qsx.jergal.dualscreen.DualScreenCoordinator
 import me.qsx.jergal.dualscreen.DualScreenPairLauncher
-import me.qsx.jergal.dualscreen.RetroLibrary
+import me.qsx.jergal.dualscreen.RomLibraryRepository
 import me.qsx.jergal.dualscreen.TaskRecentsController
 import me.qsx.jergal.ui.LauncherBottomScreen
 import me.qsx.jergal.ui.theme.JergalTheme
@@ -26,6 +29,7 @@ class BottomScreenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         TaskRecentsController.excludeCurrentTaskFromRecents(this)
+        RomLibraryRepository.ensureInitialized(applicationContext)
         DualScreenCoordinator.register(DualScreenCoordinator.BOTTOM_SCREEN, this)
         enableEdgeToEdge()
         onBackPressedDispatcher.addCallback(
@@ -38,12 +42,19 @@ class BottomScreenActivity : ComponentActivity() {
         )
         setContent {
             JergalTheme(darkTheme = true, dynamicColor = false) {
+                val libraryState by RomLibraryRepository.state.collectAsState()
                 val selectedGame by DualScreenCoordinator.selectedGame.collectAsState()
                 LauncherBottomScreen(
                     activity = this@BottomScreenActivity,
-                    games = RetroLibrary.games,
+                    games = libraryState.games,
                     selectedGame = selectedGame,
+                    libraryMessage = libraryState.libraryMessage,
+                    syncMessage = libraryState.syncMessage,
                     onSelect = DualScreenCoordinator::highlightGame,
+                    onLaunchGame = { game ->
+                        RomLibraryRepository.launchGame(this@BottomScreenActivity, game)
+                    },
+                    onOpenSettings = ::openSettingsOnCurrentDisplay,
                 )
             }
         }
@@ -88,5 +99,15 @@ class BottomScreenActivity : ComponentActivity() {
             DualScreenCoordinator.finishAll(this)
         }
         super.onDestroy()
+    }
+
+    private fun openSettingsOnCurrentDisplay() {
+        val options = ActivityOptions.makeBasic().apply {
+            setLaunchDisplayId(display?.displayId ?: Display.DEFAULT_DISPLAY)
+        }
+        val intent = Intent(this, SettingsActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent, options.toBundle())
     }
 }

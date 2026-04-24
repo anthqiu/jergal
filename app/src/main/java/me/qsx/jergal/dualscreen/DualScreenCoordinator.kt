@@ -16,7 +16,7 @@ object DualScreenCoordinator {
     private val startedScreens = linkedSetOf<String>()
     private var shutdownInProgress = false
 
-    private val _selectedGame = MutableStateFlow(RetroLibrary.games.first())
+    private val _selectedGame = MutableStateFlow<RetroGame?>(null)
     val selectedGame = _selectedGame.asStateFlow()
 
     /**
@@ -24,6 +24,14 @@ object DualScreenCoordinator {
      */
     fun highlightGame(game: RetroGame) {
         _selectedGame.value = game
+    }
+
+    /**
+     * Reconciles the current selection against the latest scanned library contents.
+     */
+    fun updateLibrary(games: List<RetroGame>) {
+        val currentId = _selectedGame.value?.id
+        _selectedGame.value = games.firstOrNull { it.id == currentId } ?: games.firstOrNull()
     }
 
     /**

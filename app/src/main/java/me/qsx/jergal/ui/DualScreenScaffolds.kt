@@ -3,9 +3,6 @@ package me.qsx.jergal.ui
 import android.app.Activity
 import android.app.ActivityOptions
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.content.pm.ResolveInfo
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.provider.Settings
 import android.view.Display
@@ -53,8 +50,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
@@ -87,7 +86,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import me.qsx.jergal.dualscreen.DisplayTargetResolver
+import me.qsx.jergal.dualscreen.LauncherAppEntry
 import me.qsx.jergal.dualscreen.RetroGame
+import me.qsx.jergal.dualscreen.loadLauncherApps
 import me.qsx.jergal.ui.theme.color
 import me.qsx.jergal.ui.theme.onColor
 import kotlin.math.roundToInt
@@ -99,11 +101,22 @@ import kotlinx.coroutines.withContext
  * Renders the top-screen showcase for the currently highlighted game.
  */
 @Composable
-fun LauncherTopScreen(game: RetroGame) {
+fun LauncherTopScreen(
+    game: RetroGame?,
+    emptyStateText: String,
+    syncMessage: String?,
+) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
+        if (game == null) {
+            TopEmptyStateCard(
+                emptyStateText = emptyStateText,
+                syncMessage = syncMessage,
+            )
+            return@Surface
+        }
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -143,6 +156,49 @@ fun LauncherTopScreen(game: RetroGame) {
                     TopDetailsCard(
                         game = game,
                         modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopEmptyStateCard(
+    emptyStateText: String,
+    syncMessage: String?,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "No game selected",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = emptyStateText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                syncMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -263,7 +319,7 @@ private fun TopDetailsCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetaPill(text = game.genre)
+                MetaPill(text = game.playerLabel)
                 MetaPill(text = game.platformLabel)
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.24f))
@@ -288,8 +344,12 @@ private fun TopDetailsCard(
 fun LauncherBottomScreen(
     activity: Activity,
     games: List<RetroGame>,
-    selectedGame: RetroGame,
+    selectedGame: RetroGame?,
+    libraryMessage: String,
+    syncMessage: String?,
     onSelect: (RetroGame) -> Unit,
+    onLaunchGame: (RetroGame) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val appCatalog by produceState(
         initialValue = AppDrawerCatalogState(isLoading = true),
@@ -305,8 +365,9 @@ fun LauncherBottomScreen(
     }
     val gridState = rememberLazyGridState()
 
-    LaunchedEffect(selectedGame.id) {
-        val selectedIndex = games.indexOfFirst { it.id == selectedGame.id }
+    LaunchedEffect(selectedGame?.id) {
+        val selectedId = selectedGame?.id ?: return@LaunchedEffect
+        val selectedIndex = games.indexOfFirst { it.id == selectedId }
         if (selectedIndex >= 0) {
             gridState.animateScrollToItem(selectedIndex)
         }
@@ -411,13 +472,29 @@ fun LauncherBottomScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Library",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        TextButton(onClick = onOpenSettings) {
+                            Text("Settings")
+                        }
+                    }
                     Text(
-                        text = "Library",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        text = syncMessage ?: libraryMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -434,28 +511,39 @@ fun LauncherBottomScreen(
                         (maxHeight - (gridVerticalPadding * 2) - gridSpacing) / 2f,
                     )
 
-                    LazyHorizontalGrid(
-                        rows = GridCells.Fixed(2),
-                        state = gridState,
-                        userScrollEnabled = !isLibraryInteractionLocked,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            horizontal = gridHorizontalPadding,
-                            vertical = gridVerticalPadding,
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(gridSpacing),
-                        verticalArrangement = Arrangement.spacedBy(gridSpacing),
-                    ) {
-                        items(
-                            items = games,
-                            key = { it.id },
-                        ) { game ->
-                            GameShelfCard(
-                                game = game,
-                                isSelected = game.id == selectedGame.id,
-                                cardWidth = cardWidth,
-                                onSelect = onSelect,
-                            )
+                    if (games.isEmpty()) {
+                        LibraryStatusCard(
+                            title = "No ROMs available",
+                            body = libraryMessage,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 24.dp),
+                        )
+                    } else {
+                        LazyHorizontalGrid(
+                            rows = GridCells.Fixed(2),
+                            state = gridState,
+                            userScrollEnabled = !isLibraryInteractionLocked,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                horizontal = gridHorizontalPadding,
+                                vertical = gridVerticalPadding,
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(gridSpacing),
+                            verticalArrangement = Arrangement.spacedBy(gridSpacing),
+                        ) {
+                            items(
+                                items = games,
+                                key = { it.id },
+                            ) { game ->
+                                GameShelfCard(
+                                    game = game,
+                                    isSelected = game.id == selectedGame?.id,
+                                    cardWidth = cardWidth,
+                                    onSelect = onSelect,
+                                    onLaunch = onLaunchGame,
+                                )
+                            }
                         }
                     }
                 }
@@ -520,8 +608,8 @@ fun LauncherBottomScreen(
                         isDrawerAnimating = false
                     }
                 },
-                onLaunchApp = { app ->
-                    launchAppOnCurrentDisplay(activity, app)
+                onLaunchApp = { app, displayTarget ->
+                    launchAppOnDisplay(activity, app, displayTarget)
                     isDrawerDragging = false
                     isDrawerAnimating = true
                     animationScope.launch {
@@ -547,14 +635,14 @@ fun LauncherBottomScreen(
 
 @Composable
 private fun FullScreenAppDrawer(
-    apps: List<LauncherApp>,
+    apps: List<LauncherAppEntry>,
     isLoadingApps: Boolean,
     drawerOffsetPx: Float,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Float,
     onDragEnd: (Float) -> Unit,
-    onLaunchApp: (LauncherApp) -> Unit,
-    onOpenAppInfo: (LauncherApp) -> Unit,
+    onLaunchApp: (LauncherAppEntry, AppLaunchDisplayTarget) -> Unit,
+    onOpenAppInfo: (LauncherAppEntry) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val isListAtTop by remember {
@@ -680,7 +768,7 @@ private fun FullScreenAppDrawer(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "Swipe down on the handle or press back to return. Long-press an app for info.",
+                    text = "Tap an app to launch on Upper. Use the buttons to choose Upper or Lower. Long-press for app info.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -708,10 +796,16 @@ private fun FullScreenAppDrawer(
                     AppDrawerRow(
                         app = app,
                         onClick = {
-                            onLaunchApp(app)
+                            onLaunchApp(app, AppLaunchDisplayTarget.Upper)
                         },
                         onLongClick = {
                             onOpenAppInfo(app)
+                        },
+                        onLaunchUpper = {
+                            onLaunchApp(app, AppLaunchDisplayTarget.Upper)
+                        },
+                        onLaunchLower = {
+                            onLaunchApp(app, AppLaunchDisplayTarget.Lower)
                         },
                     )
                 }
@@ -743,6 +837,7 @@ private fun GameShelfCard(
     isSelected: Boolean,
     cardWidth: androidx.compose.ui.unit.Dp,
     onSelect: (RetroGame) -> Unit,
+    onLaunch: (RetroGame) -> Unit,
 ) {
     val accentColor = game.accentRole.color()
     val accentOnColor = game.accentRole.onColor()
@@ -762,7 +857,20 @@ private fun GameShelfCard(
                     onSelect(game)
                 }
             }
-            .clickable { onSelect(game) },
+            .combinedClickable(
+                onClick = {
+                    if (isSelected && game.isLaunchable) {
+                        onLaunch(game)
+                    } else {
+                        onSelect(game)
+                    }
+                },
+                onLongClick = {
+                    if (game.isLaunchable) {
+                        onLaunch(game)
+                    }
+                },
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = coverColor,
@@ -857,9 +965,11 @@ private fun MetaPill(text: String) {
 
 @Composable
 private fun AppDrawerRow(
-    app: LauncherApp,
+    app: LauncherAppEntry,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onLaunchUpper: () -> Unit,
+    onLaunchLower: () -> Unit,
 ) {
     ListItem(
         modifier = Modifier
@@ -889,6 +999,22 @@ private fun AppDrawerRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        },
+        trailingContent = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onLaunchUpper) {
+                    Text(
+                        text = "Upper",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                OutlinedButton(onClick = onLaunchLower) {
+                    Text(
+                        text = "Lower",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
         },
     )
 }
@@ -931,7 +1057,36 @@ private fun AppDrawerStatusCard(
 }
 
 @Composable
-private fun AppIcon(app: LauncherApp) {
+private fun LibraryStatusCard(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppIcon(app: LauncherAppEntry) {
     val iconBitmap = remember(app.packageName, app.activityName) {
         app.icon?.toBitmap(width = 96, height = 96)?.asImageBitmap()
     }
@@ -967,16 +1122,24 @@ private fun LauncherAppImage(bitmap: ImageBitmap, label: String) {
     )
 }
 
-private data class LauncherApp(
-    val label: String,
-    val packageName: String,
-    val activityName: String,
-    val icon: Drawable?,
-)
+private enum class AppLaunchDisplayTarget {
+    Upper,
+    Lower,
+}
 
-private fun launchAppOnCurrentDisplay(activity: Activity, app: LauncherApp) {
+private fun launchAppOnDisplay(
+    activity: Activity,
+    app: LauncherAppEntry,
+    target: AppLaunchDisplayTarget,
+) {
+    val displayTargets = DisplayTargetResolver.resolve(activity)
     val options = ActivityOptions.makeBasic().apply {
-        setLaunchDisplayId(activity.display?.displayId ?: Display.DEFAULT_DISPLAY)
+        setLaunchDisplayId(
+            when (target) {
+                AppLaunchDisplayTarget.Upper -> displayTargets.topDisplayId
+                AppLaunchDisplayTarget.Lower -> displayTargets.bottomDisplayId
+            }
+        )
     }
     val intent = Intent(Intent.ACTION_MAIN).apply {
         addCategory(Intent.CATEGORY_LAUNCHER)
@@ -986,7 +1149,7 @@ private fun launchAppOnCurrentDisplay(activity: Activity, app: LauncherApp) {
     activity.startActivity(intent, options.toBundle())
 }
 
-private fun openAppDetailsOnCurrentDisplay(activity: Activity, app: LauncherApp) {
+private fun openAppDetailsOnCurrentDisplay(activity: Activity, app: LauncherAppEntry) {
     val options = ActivityOptions.makeBasic().apply {
         setLaunchDisplayId(activity.display?.displayId ?: Display.DEFAULT_DISPLAY)
     }
@@ -998,33 +1161,6 @@ private fun openAppDetailsOnCurrentDisplay(activity: Activity, app: LauncherApp)
 }
 
 private data class AppDrawerCatalogState(
-    val apps: List<LauncherApp> = emptyList(),
+    val apps: List<LauncherAppEntry> = emptyList(),
     val isLoading: Boolean = false,
 )
-
-private fun loadLauncherApps(packageManager: PackageManager): List<LauncherApp> {
-    val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
-        addCategory(Intent.CATEGORY_LAUNCHER)
-    }
-    return packageManager.queryIntentActivities(mainIntent, PackageManager.MATCH_ALL)
-        .asSequence()
-        .mapNotNull { resolveInfo -> resolveInfo.toLauncherApp(packageManager) }
-        .distinctBy { it.packageName }
-        .sortedBy { it.label.lowercase() }
-        .toList()
-}
-
-private fun ResolveInfo.toLauncherApp(
-    packageManager: PackageManager,
-): LauncherApp? {
-    val activityInfo = activityInfo ?: return null
-    val label = loadLabel(packageManager)?.toString()?.takeIf { it.isNotBlank() }
-        ?: activityInfo.applicationInfo.loadLabel(packageManager)?.toString()?.takeIf { it.isNotBlank() }
-        ?: activityInfo.packageName
-    return LauncherApp(
-        label = label,
-        packageName = activityInfo.packageName,
-        activityName = activityInfo.name,
-        icon = loadIcon(packageManager),
-    )
-}

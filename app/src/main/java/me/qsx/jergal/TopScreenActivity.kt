@@ -12,6 +12,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import me.qsx.jergal.dualscreen.DualScreenCoordinator
 import me.qsx.jergal.dualscreen.DualScreenPairLauncher
+import me.qsx.jergal.dualscreen.RomLibraryRepository
 import me.qsx.jergal.dualscreen.TaskRecentsController
 import me.qsx.jergal.ui.LauncherTopScreen
 import me.qsx.jergal.ui.theme.JergalTheme
@@ -28,6 +29,7 @@ class TopScreenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         TaskRecentsController.excludeCurrentTaskFromRecents(this)
+        RomLibraryRepository.ensureInitialized(applicationContext)
         DualScreenCoordinator.register(DualScreenCoordinator.TOP_SCREEN, this)
         enableEdgeToEdge()
         configureImmersiveTopScreen()
@@ -41,8 +43,13 @@ class TopScreenActivity : ComponentActivity() {
         )
         setContent {
             JergalTheme(darkTheme = true, dynamicColor = false) {
+                val libraryState by RomLibraryRepository.state.collectAsState()
                 val selectedGame by DualScreenCoordinator.selectedGame.collectAsState()
-                LauncherTopScreen(game = selectedGame)
+                LauncherTopScreen(
+                    game = selectedGame,
+                    emptyStateText = libraryState.libraryMessage,
+                    syncMessage = libraryState.syncMessage,
+                )
             }
         }
     }

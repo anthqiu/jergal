@@ -47,6 +47,9 @@ The interaction model references the Nintendo 3DS:
 - The cover should fill the full card area without internal black bars or inset framing.
 - Card size should scale automatically with available space while keeping spacing consistent.
 - Selecting or focusing a card must update the top screen immediately.
+- Tapping a non-selected game card should select it.
+- Tapping an already selected launchable game card may launch it directly on the upper screen.
+- Long-pressing a launchable game card may launch it directly.
 
 ## App Drawer Behavior
 
@@ -63,9 +66,29 @@ The interaction model references the Nintendo 3DS:
 - If the app list is already at the top and the user starts a new downward gesture, the drawer itself should follow the finger and enter the closing interaction.
 - The app drawer should show installed apps that expose a direct launch entry point through `ACTION_MAIN + CATEGORY_LAUNCHER`.
 - The app drawer should source apps from a simple launcher query based on `ACTION_MAIN + CATEGORY_LAUNCHER`.
-- The app drawer should launch the resolved activity component directly on the current display.
+- Tapping an app in the app drawer should launch it on the upper screen by default.
+- The app drawer should provide explicit controls to launch an app on either the upper screen or the lower screen.
 - Long-pressing an app in the drawer should open app details, matching common launcher expectations.
 - The drawer should handle temporary empty or loading states gracefully instead of rendering a blank list.
+
+## ROM Library and Platform Configs
+
+- The launcher must provide a settings page where the user can choose a top-level ROM folder with the Storage Access Framework.
+- The chosen ROM folder is expected to contain first-level child folders whose names match platform shortnames such as `n3ds` or `gba`.
+- The launcher should scan all first-level platform folders under the chosen ROM root and determine which of them contain readable ROM files.
+- Platform definitions should be synchronized from a user-editable platform index subscription URL.
+- The default subscription should point to the CocoonFE-style `index.json` feed.
+- The launcher should fetch `index.json` first, then fetch only the platform config files needed for the scanned local platform folders.
+- Platform config files should be cached locally so the launcher can keep working when the subscription is temporarily unavailable.
+- Platform folder names should be matched against `platformShortname`, and config file names should come from each entry's `filename`.
+- The launcher should resolve installed emulator packages by reading each platform config's `amStartArguments` and matching the referenced package against launcher-visible installed apps.
+- The resolved emulator choice for each platform should be persisted as the current launch config for that platform.
+- ROM scanning should use the platform-level filename regex together with player-level filename regexes from the synced platform config.
+- The launcher should build playable library entries from scanned ROM files even if metadata scraping is not yet populated.
+- Metadata source definitions from synced platform configs should be preserved with each scanned entry so later scraping work can build on the same synced data model.
+- The launcher should be able to launch a scanned ROM by translating the synced `amStartArguments` template into a direct Android `Intent`.
+- URI-based ROM launches should grant temporary read access to the target emulator activity.
+- Path-based ROM launches may use a best-effort path derived from the selected document tree when the provider exposes an external-storage document ID.
 
 ## Activity Coordination
 
@@ -88,6 +111,7 @@ The interaction model references the Nintendo 3DS:
 - The app-icon entry activity should behave as a non-visual trampoline rather than a visible destination.
 - The app package should qualify as an Android Home app and may request `RoleManager.ROLE_HOME` when the role is available and not yet held.
 - Generic explicit launch intents are acceptable for app drawer launches.
+- A dedicated settings activity is acceptable for launcher configuration tasks and should stay out of Recents like the rest of the launcher-owned tasks.
 - The top-screen activity may need to reassert the bottom-screen activity on resume because some devices restore only the default-display task when returning Home.
 - The bottom-screen activity may need to reassert the top-screen activity on resume because some devices or gestures can return only the secondary home surface first.
 - Safety-net activities may be launched as hidden per-display fallback tasks, but they should only restore the launcher pair when they re-enter the foreground after having been backgrounded.
