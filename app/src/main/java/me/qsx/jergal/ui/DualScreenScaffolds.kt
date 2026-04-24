@@ -4,7 +4,10 @@ import android.app.Activity
 import android.app.ActivityOptions
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.graphics.drawable.Drawable
+import android.net.Uri
+import android.provider.Settings
 import android.view.Display
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Spring
@@ -15,6 +18,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +48,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -56,6 +61,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -85,7 +91,9 @@ import me.qsx.jergal.dualscreen.RetroGame
 import me.qsx.jergal.ui.theme.color
 import me.qsx.jergal.ui.theme.onColor
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Renders the top-screen showcase for the currently highlighted game.
@@ -99,8 +107,6 @@ fun LauncherTopScreen(game: RetroGame) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
                 .padding(24.dp)
         ) {
             val isWideLayout = maxWidth >= 720.dp
@@ -285,7 +291,18 @@ fun LauncherBottomScreen(
     selectedGame: RetroGame,
     onSelect: (RetroGame) -> Unit,
 ) {
-    val installedApps = remember(activity) { loadLauncherApps(activity.packageManager) }
+    val appCatalog by produceState(
+        initialValue = AppDrawerCatalogState(isLoading = true),
+        activity,
+    ) {
+        val apps = withContext(Dispatchers.IO) {
+            loadLauncherApps(activity.packageManager)
+        }
+        value = AppDrawerCatalogState(
+            apps = apps,
+            isLoading = false,
+        )
+    }
     val gridState = rememberLazyGridState()
 
     LaunchedEffect(selectedGame.id) {
@@ -465,7 +482,8 @@ fun LauncherBottomScreen(
                 }
             }
             FullScreenAppDrawer(
-                apps = installedApps,
+                apps = appCatalog.apps,
+                isLoadingApps = appCatalog.isLoading,
                 drawerOffsetPx = visibleDrawerOffsetPx,
                 onDragStart = {
                     if (isDrawerAnimating) {
@@ -519,6 +537,9 @@ fun LauncherBottomScreen(
                         isDrawerAnimating = false
                     }
                 },
+                onOpenAppInfo = { app ->
+                    openAppDetailsOnCurrentDisplay(activity, app)
+                },
             )
         }
     }
@@ -527,11 +548,13 @@ fun LauncherBottomScreen(
 @Composable
 private fun FullScreenAppDrawer(
     apps: List<LauncherApp>,
+    isLoadingApps: Boolean,
     drawerOffsetPx: Float,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Float,
     onDragEnd: (Float) -> Unit,
     onLaunchApp: (LauncherApp) -> Unit,
+    onOpenAppInfo: (LauncherApp) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val isListAtTop by remember {
@@ -657,7 +680,7 @@ private fun FullScreenAppDrawer(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "Swipe down on the handle or press back to return.",
+                    text = "Swipe down on the handle or press back to return. Long-press an app for info.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -687,7 +710,27 @@ private fun FullScreenAppDrawer(
                         onClick = {
                             onLaunchApp(app)
                         },
+                        onLongClick = {
+                            onOpenAppInfo(app)
+                        },
                     )
+                }
+                if (isLoadingApps && apps.isEmpty()) {
+                    item(key = "loading") {
+                        AppDrawerStatusCard(
+                            title = "Loading apps",
+                            body = "Launcher entries are being collected from the system.",
+                            showProgress = true,
+                        )
+                    }
+                }
+                if (!isLoadingApps && apps.isEmpty()) {
+                    item(key = "empty") {
+                        AppDrawerStatusCard(
+                            title = "No apps available",
+                            body = "No launchable applications are visible to the drawer right now.",
+                        )
+                    }
                 }
             }
         }
@@ -816,12 +859,16 @@ private fun MetaPill(text: String) {
 private fun AppDrawerRow(
     app: LauncherApp,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     ListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
@@ -844,6 +891,43 @@ private fun AppDrawerRow(
             )
         },
     )
+}
+
+@Composable
+private fun AppDrawerStatusCard(
+    title: String,
+    body: String,
+    showProgress: Boolean = false,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (showProgress) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable
@@ -890,33 +974,57 @@ private data class LauncherApp(
     val icon: Drawable?,
 )
 
-private fun loadLauncherApps(packageManager: PackageManager): List<LauncherApp> {
-    val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
-        addCategory(Intent.CATEGORY_LAUNCHER)
-    }
-    return packageManager.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
-        .asSequence()
-        .map { resolveInfo ->
-            LauncherApp(
-                label = resolveInfo.loadLabel(packageManager).toString(),
-                packageName = resolveInfo.activityInfo.packageName,
-                activityName = resolveInfo.activityInfo.name,
-                icon = resolveInfo.loadIcon(packageManager),
-            )
-        }
-        .distinctBy { "${it.packageName}/${it.activityName}" }
-        .sortedBy { it.label.lowercase() }
-        .toList()
-}
-
 private fun launchAppOnCurrentDisplay(activity: Activity, app: LauncherApp) {
+    val options = ActivityOptions.makeBasic().apply {
+        setLaunchDisplayId(activity.display?.displayId ?: Display.DEFAULT_DISPLAY)
+    }
     val intent = Intent(Intent.ACTION_MAIN).apply {
         addCategory(Intent.CATEGORY_LAUNCHER)
         setClassName(app.packageName, app.activityName)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
+    activity.startActivity(intent, options.toBundle())
+}
+
+private fun openAppDetailsOnCurrentDisplay(activity: Activity, app: LauncherApp) {
     val options = ActivityOptions.makeBasic().apply {
         setLaunchDisplayId(activity.display?.displayId ?: Display.DEFAULT_DISPLAY)
     }
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", app.packageName, null)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
     activity.startActivity(intent, options.toBundle())
+}
+
+private data class AppDrawerCatalogState(
+    val apps: List<LauncherApp> = emptyList(),
+    val isLoading: Boolean = false,
+)
+
+private fun loadLauncherApps(packageManager: PackageManager): List<LauncherApp> {
+    val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+        addCategory(Intent.CATEGORY_LAUNCHER)
+    }
+    return packageManager.queryIntentActivities(mainIntent, PackageManager.MATCH_ALL)
+        .asSequence()
+        .mapNotNull { resolveInfo -> resolveInfo.toLauncherApp(packageManager) }
+        .distinctBy { it.packageName }
+        .sortedBy { it.label.lowercase() }
+        .toList()
+}
+
+private fun ResolveInfo.toLauncherApp(
+    packageManager: PackageManager,
+): LauncherApp? {
+    val activityInfo = activityInfo ?: return null
+    val label = loadLabel(packageManager)?.toString()?.takeIf { it.isNotBlank() }
+        ?: activityInfo.applicationInfo.loadLabel(packageManager)?.toString()?.takeIf { it.isNotBlank() }
+        ?: activityInfo.packageName
+    return LauncherApp(
+        label = label,
+        packageName = activityInfo.packageName,
+        activityName = activityInfo.name,
+        icon = loadIcon(packageManager),
+    )
 }

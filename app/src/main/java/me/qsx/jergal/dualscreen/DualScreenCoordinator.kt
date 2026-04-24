@@ -13,6 +13,7 @@ object DualScreenCoordinator {
     const val BOTTOM_SCREEN = "bottom_screen"
 
     private val trackedActivities = linkedMapOf<String, WeakReference<Activity>>()
+    private val startedScreens = linkedSetOf<String>()
     private var shutdownInProgress = false
 
     private val _selectedGame = MutableStateFlow(RetroLibrary.games.first())
@@ -40,6 +41,7 @@ object DualScreenCoordinator {
     @Synchronized
     fun unregister(key: String) {
         trackedActivities.remove(key)
+        startedScreens.remove(key)
         if (trackedActivities.values.none { it.get() != null }) {
             shutdownInProgress = false
         }
@@ -64,5 +66,25 @@ object DualScreenCoordinator {
         if (origin != null && !origin.isFinishing) {
             origin.finish()
         }
+    }
+
+    @Synchronized
+    internal fun markScreenStarted(key: String) {
+        startedScreens.add(key)
+    }
+
+    @Synchronized
+    internal fun markScreenStopped(key: String) {
+        startedScreens.remove(key)
+    }
+
+    @Synchronized
+    internal fun isDualHomeVisible(): Boolean {
+        return startedScreens.contains(TOP_SCREEN) && startedScreens.contains(BOTTOM_SCREEN)
+    }
+
+    @Synchronized
+    internal fun isScreenVisible(key: String): Boolean {
+        return startedScreens.contains(key)
     }
 }

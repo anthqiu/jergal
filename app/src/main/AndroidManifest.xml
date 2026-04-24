@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -13,28 +19,55 @@
         android:theme="@style/Theme.Jergal">
         <activity
             android:name=".BottomScreenActivity"
+            android:autoRemoveFromRecents="true"
             android:excludeFromRecents="true"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:taskAffinity="me.qsx.jergal.bottom"
-            android:theme="@style/Theme.Jergal" />
-
-        <activity
-            android:name=".TopScreenActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:taskAffinity="me.qsx.jergal.top"
-            android:theme="@style/Theme.Jergal" />
-
-        <activity
-            android:name=".DualScreenLauncherActivity"
             android:exported="true"
-            android:label="@string/app_name"
+            android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:taskAffinity="me.qsx.jergal.bottom"
             android:theme="@style/Theme.Jergal">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SECONDARY_HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
+        <activity
+            android:name=".TopScreenActivity"
+            android:autoRemoveFromRecents="true"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:taskAffinity="me.qsx.jergal.top"
+            android:theme="@style/Theme.Jergal">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".DualScreenSafetyNetActivity"
+            android:autoRemoveFromRecents="true"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="standard"
+            android:resizeableActivity="true"
+            android:taskAffinity="me.qsx.jergal.safetynet"
+            android:theme="@style/Theme.Jergal.Transparent" />
+
+        <activity
+            android:name=".DualScreenLauncherActivity"
+            android:autoRemoveFromRecents="true"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Jergal.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

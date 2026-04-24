@@ -1,46 +1,57 @@
 package me.qsx.jergal
 
-import android.app.Activity
-import android.app.ActivityOptions
-import android.content.Intent
-import android.hardware.display.DisplayManager
+import android.app.role.RoleManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import android.view.Display
+import androidx.activity.result.contract.ActivityResultContracts
+import me.qsx.jergal.dualscreen.DualScreenCoordinator
+import me.qsx.jergal.dualscreen.DualScreenPairLauncher
+import me.qsx.jergal.dualscreen.TaskRecentsController
 
 /**
  * Lightweight entry activity that launches the paired top-screen and bottom-screen activities.
  */
 class DualScreenLauncherActivity : ComponentActivity() {
+    private var hasLaunchedDualScreenPair = false
+    private val requestHomeRole =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            launchDualScreenPairIfNeeded()
+        }
+
     /**
-     * Starts both screen activities on their target displays and immediately finishes the launcher.
+     * Requests the Home role when needed, then starts both screen activities on their target displays.
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        launchDualScreenPair()
+        TaskRecentsController.excludeCurrentTaskFromRecents(this)
+        if (DualScreenCoordinator.isDualHomeVisible()) {
+            finish()
+            return
+        }
+        if (!requestHomeRoleIfNeeded()) {
+            launchDualScreenPairIfNeeded()
+        }
+    }
+
+    private fun requestHomeRoleIfNeeded(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return false
+        }
+        val roleManager = getSystemService(RoleManager::class.java) ?: return false
+        if (!roleManager.isRoleAvailable(RoleManager.ROLE_HOME) || roleManager.isRoleHeld(RoleManager.ROLE_HOME)) {
+            return false
+        }
+        requestHomeRole.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME))
+        return true
+    }
+
+    private fun launchDualScreenPairIfNeeded() {
+        if (hasLaunchedDualScreenPair || isFinishing || isDestroyed) {
+            return
+        }
+        hasLaunchedDualScreenPair = true
+        DualScreenPairLauncher.launchPair(this)
         finish()
-    }
-
-    private fun launchDualScreenPair() {
-        val displayManager = getSystemService(DisplayManager::class.java)
-        val displays = displayManager?.displays?.sortedBy { it.displayId }.orEmpty()
-        val topDisplayId = displays.firstOrNull { it.displayId == Display.DEFAULT_DISPLAY }?.displayId
-            ?: displays.firstOrNull()?.displayId
-            ?: Display.DEFAULT_DISPLAY
-        val bottomDisplayId = displays.firstOrNull { it.displayId != topDisplayId }?.displayId
-            ?: topDisplayId
-
-        launchOnDisplay(TopScreenActivity::class.java, topDisplayId)
-        launchOnDisplay(BottomScreenActivity::class.java, bottomDisplayId)
-    }
-
-    private fun launchOnDisplay(target: Class<out Activity>, displayId: Int) {
-        val options = ActivityOptions.makeBasic().apply {
-            setLaunchDisplayId(displayId)
-        }
-        val intent = Intent(this, target).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        }
-        startActivity(intent, options.toBundle())
     }
 }
